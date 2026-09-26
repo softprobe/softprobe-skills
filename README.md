@@ -56,3 +56,7 @@ Do not fork `SKILL.md` per agent.
 ## License
 
 Apache License 2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+
+## Operator note (Explorer)
+
+`login.py` opens `/auth/cli?port=…` on Explorer. Production Explorer must serve that route, and Supabase Auth redirect allowlist must include `https://explorer.softprobe.ai/auth/cli**`.
