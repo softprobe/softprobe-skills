@@ -9,10 +9,14 @@ This is **not** the OpenCode capture package (`@softprobe/opencode-plugin`). Cap
 ### 1. Install
 
 ```bash
-npx skills add softprobe/softprobe-skills -g
+npx skills add softprobe/softprobe-skills -g -y \
+  -a cursor -a claude-code -a codex -a opencode \
+  -s softprobe-agent-qa
 ```
 
-Works with Cursor, Claude Code, Codex, OpenCode, and peers (symlink by default).
+That should finish with **exit 0** and only green installs for those agents (symlink into `~/.agents/skills/softprobe-agent-qa`).
+
+Do **not** treat a bare `npx skills add … -g -y` (no `-a`) as success if you see `Failed to install 1` / PromptScript. That is a [known skills CLI bug](https://github.com/vercel-labs/skills/issues/1352): it fans out to PromptScript, which has no global skills dir, then prints a red failure even when Cursor/Claude/Codex/OpenCode already installed. Re-run with the `-a` list above for a clean install.
 
 Claude plugin (same repo, no second package):
 
