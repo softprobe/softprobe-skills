@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Install symlink DRY check
+        run: |
+          chmod +x install.sh
+          ./install.sh
+          test -L "$HOME/.agents/skills/softprobe-agent-qa"
+          test "$(readlink "$HOME/.agents/skills/softprobe-agent-qa")" = "$(pwd)/skills/softprobe-agent-qa"
+          test -f skills/softprobe-agent-qa/SKILL.md
+          # Fail if a second SKILL.md copy was created under home skill trees as a real file
+          if [[ -f "$HOME/.agents/skills/softprobe-agent-qa/SKILL.md" && ! -L "$HOME/.agents/skills/softprobe-agent-qa" ]]; then
+            echo "Expected symlink install, found copied tree" >&2
+            exit 1
+          fi

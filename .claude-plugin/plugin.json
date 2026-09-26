@@ -1,0 +1,8 @@
+{
+  "name": "softprobe-skills",
+  "description": "Softprobe Agent QA skills for diagnosing sessions and traces in Explorer.",
+  "version": "0.1.0",
+  "author": {
+    "name": "SoftProbe, Inc."
+  }
+}
