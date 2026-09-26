@@ -64,5 +64,6 @@ link_or_copy "${HOME}/.codex/skills"
 link_or_copy "${HOME}/.config/opencode/skills"
 
 echo
-echo "Next (human only): python3 $SKILL_SRC/scripts/login.py"
-echo "Claude plugin:     claude --plugin-dir $ROOT"
+echo "Next:  bash $SKILL_SRC/scripts/install-mcp.sh   # cursor --add-mcp / claude mcp add"
+echo "Then:  python3 $SKILL_SRC/scripts/login.py      # human only"
+echo "Claude plugin: claude --plugin-dir $ROOT"

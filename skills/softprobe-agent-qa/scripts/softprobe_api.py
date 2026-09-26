@@ -148,6 +148,110 @@ def sql_literal(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def call(command: str, **kwargs: Any) -> tuple[int, Any]:
+    """Run a named API command. Shared by CLI and MCP."""
+    if command == "whoami":
+        token, creds = bearer_token()
+        status, result = gateway_request("GET", "/api/workspaces")
+        workspaces = result.get("workspaces") if isinstance(result, dict) else result
+        return status, {
+            "ok": True,
+            "explorer_base": explorer_base(creds),
+            "email": creds.get("email"),
+            "token_preview": f"{token[:6]}…",
+            "workspaces": workspaces,
+        }
+
+    if command == "list-workspaces":
+        return gateway_request("GET", "/api/workspaces", auto_workspace=False)
+
+    if command == "select-workspace":
+        wid = str(kwargs["workspace_id"]).strip()
+        return gateway_request(
+            "POST",
+            f"/api/workspaces/{urllib.parse.quote(wid)}/select",
+            {},
+            auto_workspace=False,
+        )
+
+    if command == "search-sessions":
+        payload = {
+            "from": kwargs["from_time"],
+            "to": kwargs["to_time"],
+            "limit": kwargs.get("limit", 50),
+            "cursor": kwargs.get("cursor"),
+            "agent_name": kwargs.get("agent_name"),
+        }
+        return gateway_request(
+            "POST",
+            lake_path("/v1/llm/sessions/search"),
+            {k: v for k, v in payload.items() if v is not None},
+        )
+
+    if command == "get-session":
+        path = lake_path(f"/v1/llm/sessions/{urllib.parse.quote(str(kwargs['session_id']))}")
+        path += query_string({"limit": kwargs.get("limit", 200)})
+        return gateway_request("GET", path)
+
+    if command == "get-session-observations":
+        path = lake_path(
+            f"/v1/llm/sessions/{urllib.parse.quote(str(kwargs['session_id']))}/observations"
+        )
+        path += query_string(
+            {"limit": kwargs.get("limit", 200), "cursor": kwargs.get("cursor")}
+        )
+        return gateway_request("GET", path)
+
+    if command == "search-observations":
+        types = kwargs.get("observation_types")
+        if isinstance(types, str):
+            types = [t.strip() for t in types.split(",") if t.strip()] or None
+        payload = {
+            "from": kwargs["from_time"],
+            "to": kwargs["to_time"],
+            "session_id": kwargs.get("session_id"),
+            "observation_types": types,
+            "limit": kwargs.get("limit"),
+            "cursor": kwargs.get("cursor"),
+        }
+        return gateway_request(
+            "POST",
+            lake_path("/v1/llm/observations/search"),
+            {k: v for k, v in payload.items() if v is not None},
+        )
+
+    if command == "get-observation":
+        return gateway_request(
+            "GET",
+            lake_path(f"/v1/llm/observations/{urllib.parse.quote(str(kwargs['span_id']))}"),
+        )
+
+    if command == "get-trace":
+        path = lake_path(f"/v1/llm/traces/{urllib.parse.quote(str(kwargs['trace_id']))}")
+        path += query_string(
+            {"limit": kwargs.get("limit", 200), "cursor": kwargs.get("cursor")}
+        )
+        return gateway_request("GET", path)
+
+    if command == "logs-by-session":
+        sid = sql_literal(str(kwargs["session_id"]))
+        sql = (
+            "SELECT timestamp, trace_id, span_id, severity_text, body "
+            f"FROM union_logs WHERE session_id = {sid} ORDER BY timestamp"
+        )
+        return gateway_request("POST", lake_path("/v1/query/sql"), {"sql": sql})
+
+    if command == "logs-by-trace":
+        tid = sql_literal(str(kwargs["trace_id"]))
+        sql = (
+            "SELECT timestamp, span_id, severity_text, body "
+            f"FROM union_logs WHERE trace_id = {tid} ORDER BY timestamp"
+        )
+        return gateway_request("POST", lake_path("/v1/query/sql"), {"sql": sql})
+
+    raise RuntimeError(f"unknown command: {command}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -196,96 +300,8 @@ def main() -> int:
     logs_t.add_argument("trace_id")
 
     args = parser.parse_args()
-
-    if args.command == "whoami":
-        token, creds = bearer_token()
-        status, result = gateway_request("GET", "/api/workspaces")
-        result = {
-            "ok": True,
-            "explorer_base": explorer_base(creds),
-            "email": creds.get("email"),
-            "token_preview": f"{token[:6]}…",
-            "workspaces": result.get("workspaces") if isinstance(result, dict) else result,
-        }
-    elif args.command == "list-workspaces":
-        status, result = gateway_request("GET", "/api/workspaces", auto_workspace=False)
-    elif args.command == "select-workspace":
-        wid = args.workspace_id.strip()
-        status, result = gateway_request(
-            "POST",
-            f"/api/workspaces/{urllib.parse.quote(wid)}/select",
-            {},
-            auto_workspace=False,
-        )
-    elif args.command == "search-sessions":
-        payload = {
-            "from": args.from_time,
-            "to": args.to_time,
-            "limit": args.limit,
-            "cursor": args.cursor,
-            "agent_name": args.agent_name,
-        }
-        status, result = gateway_request(
-            "POST",
-            lake_path("/v1/llm/sessions/search"),
-            {k: v for k, v in payload.items() if v is not None},
-        )
-    elif args.command == "get-session":
-        path = lake_path(f"/v1/llm/sessions/{urllib.parse.quote(args.session_id)}")
-        path += query_string({"limit": args.limit})
-        status, result = gateway_request("GET", path)
-    elif args.command == "get-session-observations":
-        path = lake_path(
-            f"/v1/llm/sessions/{urllib.parse.quote(args.session_id)}/observations"
-        )
-        path += query_string({"limit": args.limit, "cursor": args.cursor})
-        status, result = gateway_request("GET", path)
-    elif args.command == "search-observations":
-        payload = {
-            "from": args.from_time,
-            "to": args.to_time,
-            "session_id": args.session_id,
-            "observation_types": (
-                args.observation_types.split(",") if args.observation_types else None
-            ),
-            "limit": args.limit,
-            "cursor": args.cursor,
-        }
-        status, result = gateway_request(
-            "POST",
-            lake_path("/v1/llm/observations/search"),
-            {k: v for k, v in payload.items() if v is not None},
-        )
-    elif args.command == "get-observation":
-        status, result = gateway_request(
-            "GET",
-            lake_path(f"/v1/llm/observations/{urllib.parse.quote(args.span_id)}"),
-        )
-    elif args.command == "get-trace":
-        path = lake_path(f"/v1/llm/traces/{urllib.parse.quote(args.trace_id)}")
-        path += query_string({"limit": args.limit, "cursor": args.cursor})
-        status, result = gateway_request("GET", path)
-    elif args.command == "logs-by-session":
-        sid = sql_literal(args.session_id)
-        sql = (
-            "SELECT timestamp, trace_id, span_id, severity_text, body "
-            f"FROM union_logs WHERE session_id = {sid} ORDER BY timestamp"
-        )
-        status, result = gateway_request(
-            "POST", lake_path("/v1/query/sql"), {"sql": sql}
-        )
-    elif args.command == "logs-by-trace":
-        tid = sql_literal(args.trace_id)
-        sql = (
-            "SELECT timestamp, span_id, severity_text, body "
-            f"FROM union_logs WHERE trace_id = {tid} ORDER BY timestamp"
-        )
-        status, result = gateway_request(
-            "POST", lake_path("/v1/query/sql"), {"sql": sql}
-        )
-    else:
-        raise RuntimeError(f"unknown command: {args.command}")
-
+    kwargs = {k: v for k, v in vars(args).items() if k != "command" and v is not None}
+    status, result = call(args.command, **kwargs)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if 200 <= status < 300 else 1
 

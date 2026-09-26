@@ -1,6 +1,8 @@
 # API cheat sheet
 
-Scripts live next to this skill: `scripts/softprobe_api.py`.
+Prefer **MCP tools** on the `softprobe` server (`get_session`, `search_sessions`, …) when registered via `scripts/install-mcp.sh`.
+
+CLI fallback: `scripts/softprobe_api.py` (same operations).
 
 ```bash
 API="python3 skills/softprobe-agent-qa/scripts/softprobe_api.py"
